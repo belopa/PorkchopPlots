@@ -7,20 +7,20 @@ function [Velocity_Vector1,Velocity_Vector2] = Function_Lambert_Solver(z, mu,R1,
 %%input whether you want the orbit to be prograde or retrograde.
 
 %%Note that all the functions used throughout are found at the end of this
-%%document. In such way, the inputs (like z or delta_t) can be inputted
-%%into the function and used in certain areas of the code without having to
-%%include it every time (if that makes sense). The code will refer to the
-%%functions included at the bottom every time it needs to and input the
-%%according value of z or delta_t that you call.
+%%document. In such way, the code will refer to the functions included at the
+%%bottom every time it needs to and input the according value of z or delta_t 
+%%that is being called through the code.
 
     %%%%%%%%%ALL OF THESE EQUATIONS CAN BE FOUND IN "ORBITAL MECHANICS FOR
                         %%%%%%%%%ENGINEERING STUDENTS"            
 
 %% Step 1: Calculate the norm of the position vectors to give the "magnitude"
+
 r1 = norm(R1);
 r2 = norm(R2);
 
 %% Step 2: Calculate the change in true anomaly 
+
 sigma = acos((dot(R1,R2))/(r1*r2));               % Change in true anomaly (Eq 5.23) 
 c12   = cross(R1, R2);                            % Cross product of R1 and R2 (Pg 199)
 
@@ -37,6 +37,7 @@ elseif strcmp(string,'retro')
 end
 
 %% Step 3: Simplification expression  
+
 A = sin(sigma)*sqrt((r1*r2)/(1-cos(sigma)));        % (Eq 5.35)
 
 
@@ -70,11 +71,13 @@ end
 
 
 %% Step 6: Calculating Lagrange function
+
 f     = 1 - (y(z)/r1);            % Lagrange function (Eq 5.46a)
 g     = A*sqrt(y(z)/mu);          % Lagrange function (Eq 5.46b)
 g_dot = 1 - (y(z)/r2);            % Lagrange function (Eq 5.46d)
 
-%% Step 6: Calculating Velocity Vectors
+%% Step 7: Calculating Velocity Vectors
+
 Velocity_Vector1 = (1/g)*(R2-(f.*R1));              % Velocity Vector 1 (Eq 5.28)
 Velocity_Vector2 = (1/g)*((g_dot.*R2)-R1);          % Velocity Vector 2 (Eq 5.29)
 
@@ -82,7 +85,7 @@ R = [R1 R2];                                        % Position Vector
 V = [Velocity_Vector1 Velocity_Vector2];            % Velocity Vector
 
 
-%% Step 7: Converting Position Vectors into Keplerian Elements
+%% Step 8: Converting Position Vectors into Keplerian Elements
 
 r     = norm(R1);
 v     = norm(Velocity_Vector1);
