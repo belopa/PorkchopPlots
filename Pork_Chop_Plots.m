@@ -2,31 +2,42 @@ clear
 clc
                         %%%%%%%%%Inputs%%%%%%%%%
 
-z_input = 1.5;                          %Initial guess for value of z
-mu_Sun   = 1.32712428e11;               %mu_Sun
+z_input       = 2;                        %Initial guess for value of z
+mu_Sun        = 1.32712428e11;            %mu_Sun (km)
+mu_Mercury_km = 2.203e4;                  %Standard gravitational parameter of Mercury
+mu_Venus_km   = 3.249e5;                  %Standard gravitational parameter of Venus
+mu_Earth_km   = 3.986e5;                  %Standard gravitational parameter of Earth
+mu_Mars_km    = 4.283e4;                  %Standard gravitational parameter of Mars
+mu_Jupiter_km = 1.267e8;                  %Standard gravitational parameter of Jupiter
+mu_Saturn_km  = 3.794e7;                  %Standard gravitational parameter of Saturn
+mu_Uranus_km  = 5.795e6;                  %Standard gravitational parameter of Uranus
+mu_Neptune_km = 6.837e6;                  %Standard gravitational parameter of Neptune
 
                         %%%%%%%%%Pork chop plot%%%%%%%%%
 
 %% Step 1: Choose departure and arrival planets
 depPlanet = 'Earth';
 arrPlanet = 'Mars';
-
+dep_mu    = mu_Earth_km;
+arr_mu    = mu_Mars_km;
 
 %% Step 2: Choose an optimal departure and arrival day
-day_dep = datetime('20-06-2005','InputFormat','dd-MM-yyyy');
-day_arr = datetime('01-12-2008','InputFormat','dd-MM-yyyy');
-JD_dep  = juliandate(day_dep);                                  %Convert to Julian Days
+day_dep = datetime('01-05-2020','InputFormat','dd-MM-yyyy');
+day_arr = datetime('01-12-2020','InputFormat','dd-MM-yyyy');
+
+%Convert to Julian Days
+JD_dep  = juliandate(day_dep);                                  
 JD_arr  = juliandate(day_arr);
 
 
 %% Step 3: Define the desired time window for arrival and departure (to be added to date above)
-tWindowDep = 400; % days added to nominal departure date
-tWindowArr = 400; % days added to nominal arrival date
+tWindowDep = 200; % days added to nominal departure date
+tWindowArr = 200; % days added to nominal arrival date
 
 
 %% Step 4: Define the time steps to build array (defines grid resolution)
-tStepDep   = 10;  % departure resolution
-tStepArr   = 10;  % arrival resolution
+tStepDep   = 1;  % departure resolution
+tStepArr   = 1;  % arrival resolution
 
 
 %% Step 5: Print what the arrival and departure days are in Command Window
@@ -59,8 +70,40 @@ end
 %% Step 8: Generate array of planetary ephemerides at each departure/arrival time
 % (The function used (GenerateEphemerides) can be found at the bottom of
 % the doc)
-[rArray_dep, vArray_dep]=GenerateEphemerides(JDArrayDep, depPlanet);
-[rArray_arr, vArray_arr]=GenerateEphemerides(JDArrayArr, arrPlanet);
+[rArray_dep_km, vArray_dep_km]=GenerateEphemerides(JDArrayDep, depPlanet);
+[rArray_arr_km, vArray_arr_km]=GenerateEphemerides(JDArrayArr, arrPlanet);
+
+%used later
+rArray_arr_km_inv = rArray_arr_km';
+
+%% Create cells to have all three velocity components in the same cell for correct indexing below
+%Empty cells
+cell_arr_planet = cell(length(JDArrayDep),length(JDArrayDep));
+cell_dep_planet = cell(length(JDArrayDep),length(JDArrayDep));
+
+%Input velocities into empty cells
+for i = 1:length(JDArrayDep)
+    for j = 1:length(JDArrayDep)
+        cell_dep_planet{j,i} = vArray_dep_km(i,:);
+
+    end
+end
+
+clear i j
+
+for j = 1:length(JDArrayArr)
+    for i = 1:length(JDArrayArr)
+        cell_arr_planet{j,i} = vArray_arr_km(j,:);
+
+    end
+end
+
+clear i j
+
+%Rename
+Velocity_Planet1 = cell_dep_planet;
+Velocity_Planet2 = cell_arr_planet;
+
 
 
 %% Step 9: Go through all departure/arrival times, and use Lamberts algorithm
@@ -76,75 +119,106 @@ for i = 1:length(JDArrayDep)
 
         JDf = JDArrayArr(j);
         
-        %Build meshes for contour plot axis
-        deltDepMesh(i,j) = JDi-JD_dep;
-        deltArrMesh(i,j) = JDf-JD_arr;
-
+        % Build meshes for contour plot axis
+        deltDepMesh(i,:) = JDArrayDep(:,i)-JD_dep;
+        deltArrMesh(j,:) = JDArrayArr(:,j)-JD_arr;
+        
         
         % Compute heliocentric orbital velocity at departure and arrival using Lambert's method
-        TOF = 86400.0*(JDf - JDi);                                                              % time of flight, in seconds
-        [v1Vec,v2Vec] = Function_Lambert_Solver(z_input, mu_Sun, rArray_dep(i,:), rArray_arr(j,:), TOF, 'pro');       
-        counter_3 = counter_3 + 1
+        TOF(i,j)                = 86400.0*(JDArrayArr(:,j) - JDArrayDep(:,i));         % time of flight, in seconds (conversion from days to s)
+        [v1Vec{i,j},v2Vec{i,j}, Elements] = Function_Lambert_Solver(z_input, mu_Sun, rArray_dep_km(i,:), rArray_arr_km(j,:), rArray_arr_km_inv(:,j), TOF(i,j), 'pro');       
+        counter_3               = counter_3 + 1
 
-        % Compute excess velocity for departure and arrival
-        vInf_dep = norm(v1Vec - vArray_dep(i,:)); 
-        vInf_arr = norm(v2Vec - vArray_arr(j,:));
-
-        % Compute porkchop plot values
-        TOFarray(i,j) = JDf - JDi;  
-        C3(i,j) = vInf_dep^2;               %C3 = specific energy
-        vInf(i,j) = vInf_arr;               %vInf = excess velocity
+      
     end
 end
+
 clear i j
-fprintf('DONE!\n')
+
+%% Calculate excess velocity & specific energy & time of flight
+%Create cells for correct indexing
+cell_vinf1 = cell(length(JDArrayDep),length(JDArrayDep));
+cell_vinf2 = cell(length(JDArrayDep),length(JDArrayDep));
+
+%Rename
+vInf_dep = cell_vinf1;
+vInf_arr = cell_vinf2;
+
+%Compute excess velocity at arrival and departure using correct indexing
+for i = 1:length(JDArrayDep)
+    for j = 1:length(JDArrayDep)
+        vInf_dep{i,j} = v1Vec{i,j} - Velocity_Planet1{i,j}; 
+        vInf_dep_array(i,j) = norm(v1Vec{i,j} - Velocity_Planet1{i,j});
+        vInf_arr{i,j} = v2Vec{i,j} - Velocity_Planet2{i,j};
+        vInf_arr_array(i,j) = norm(v2Vec{i,j} - Velocity_Planet2{i,j});
+    end
+end
+
+clear i j
+
+%Rename for plotting
+TOF_Array     = TOF./86400;                   %Time of flight in days
+C3            = vInf_dep_array.^2;            %Specific energy
+vInf          = vInf_arr_array;               %Excess velocity
+
+
+Array_Dep = datetime(JDArrayDep, 'ConvertFrom', 'juliandate');
+Array_Arr = datetime(JDArrayArr, 'ConvertFrom', 'juliandate');
+
+
+
+%% PLOTTING POSITION OF PLANETS
+
+figure(1)
+plot3(rArray_arr_km(:,1),rArray_arr_km(:,2),rArray_arr_km(:,3),'o')
+title(['Orbit of ' depPlanet ' and ' arrPlanet ' around Sun'])
+grid on
+hold on
+plot3(rArray_dep_km(:,1),rArray_dep_km(:,2),rArray_dep_km(:,3),'o')
+legend([arrPlanet ' orbit'],[depPlanet ' orbit'])
+hold off
+
+fprintf('Position plot: DONE!\n')
 
 %% PLOT THE PORKCHOP
-% 
 
-C3_levels    = linspace(80, 1.8e3, 20);
-TOF_levels   = linspace(750, 1700, 20);
-V_inf_levels = linspace(13, 33, 20);
-
-col1 = [0.8,0.2,0.2];
-col2 = [0.2,0.2,0.8];
-col3 = [0.4,0.4,0.4];
-
-% contour sintax: 
-% First two arguments are used to define the a grid in the x-y plane
-% The third argument is what you want to plot (i.e. Excess velocity)
-% The forth argument is the levels in which you want to do them (syntax it
-% for better explanation)
-
-close all
-figure
-set(gcf, 'color', 'w')
+figure(2)
 hold on
-[c1,h1]=contour(deltDepMesh, deltArrMesh, vInf, V_inf_levels, 'showtext','on', 'color', col1,'linewidth',1.5);
-[c2,h2]=contour(deltDepMesh, deltArrMesh, C3, C3_levels, 'showtext','on','color', col2,'linewidth',1.5);
-[c3,h3]=contour(deltDepMesh, deltArrMesh, TOFarray, TOF_levels, 'showtext','on','color', col3);
-hold off
+grid on
+contour(JDArrayDep,JDArrayArr, vInf, 20,'ShowText','on','color','r');
+contour(JDArrayDep, JDArrayArr, C3, 10, 'color','b','LineWidth',1.5,'ShowText','on');
+contour(JDArrayDep, JDArrayArr, TOF_Array, 10, 'color', 'g','ShowText','on', 'LineStyle','--', 'LineWidth',1.5);
 box on
+hold off
 xlabel(['Departure (Days past ', depStr{1},')'],'FontSize',18)
-ylabel(['Departure (Days past ', arrStr{1},')'],'FontSize',18)
+ylabel(['Arrival (Days past ', arrStr{1},')'],'FontSize',18)
 title([depPlanet, '-to-', arrPlanet, ' Trajectories'],'FontSize',18)
 legend({'v_{\infty}','C3','TOF'},'Location','northeastoutside','fontsize',16)
 
+fprintf('Porkchop plot: DONE!\n')
 
 
+%% SURFACE PLOT
+figure(3)
+surf(JDArrayDep,JDArrayArr,vInf)
+xlabel(['Departure (Days past ', depStr{1},')'],'FontSize',18)
+ylabel(['Arrival (Days past ', arrStr{1},')'],'FontSize',18)
+zlabel('v_{\infty}','FontSize',18)
+title([depPlanet, '-to-', arrPlanet, ' Trajectories'],'FontSize',18)
+
+fprintf('Surface plot: DONE!\n')
 %--------------------------------------------------------------------%
                             %FUNCTIONS%
 %% FUNCTION 1: Generating the ephemeris of all of the planets
 
-function [ rArray, vArray ] = GenerateEphemerides( JDArray, planet )
-%GenerateEphemerides Generate array of planetary ephemerides
+function [ rArray, vArray ] = GenerateEphemerides( JDArray,  planet)
 
    r_array = zeros(length(JDArray),3);
    v_array = zeros(length(JDArray),3);
 
    
    for i = 1:length(JDArray)
-      [r_array(i,:), v_array(i,:)] = planetEphemeris(JDArray(i), 'Sun', planet,'421');
+      [r_array(i,:), v_array(i,:)] = planetEphemeris(JDArray(i),'Sun',planet,'421');
       % (if you have forgotten what the inputs mean, look at the documentation of 'planetEphemeris')
    end
 
