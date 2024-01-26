@@ -1,4 +1,4 @@
-function [Velocity_Vector1,Velocity_Vector2] = Function_Lambert_Solver(z, mu,R1,R2,delta_t,string)
+function [Velocity_Vector1,Velocity_Vector2, Elements] = Function_Lambert_Solver(z, mu,R1,R2,R2_inv,delta_t,string)
 
                         %%%%%%%%%INTRODUCTION%%%%%%%%
 %%In this function we want to calculate the velocity vectors of a point on
@@ -7,22 +7,27 @@ function [Velocity_Vector1,Velocity_Vector2] = Function_Lambert_Solver(z, mu,R1,
 %%input whether you want the orbit to be prograde or retrograde.
 
 %%Note that all the functions used throughout are found at the end of this
-%%document. In such way, the code will refer to the functions included at the
-%%bottom every time it needs to and input the according value of z or delta_t 
-%%that is being called through the code.
+%%document. In such way, the inputs (like z or delta_t) can be inputted
+%%into the function and used in certain areas of the code without having to
+%%include it every time (if that makes sense). The code will refer to the
+%%functions included at the bottom every time it needs to and input the
+%%according value of z or delta_t that you call.
 
     %%%%%%%%%ALL OF THESE EQUATIONS CAN BE FOUND IN "ORBITAL MECHANICS FOR
                         %%%%%%%%%ENGINEERING STUDENTS"            
 
-%% Step 1: Calculate the norm of the position vectors to give the "magnitude"
+%% Step 1&2:  Calculate the norm of the position vectors to give the "magnitude"
+%% Calculate the change in true anomaly 
 
 r1 = norm(R1);
 r2 = norm(R2);
+dot_product = dot(R1,R2_inv);
+multiple_position = norm(R1)*norm(R2_inv);
+c12 = cross(R1, R2);
+division_position = (dot_product./multiple_position');
+sigma = acos(division_position);                         % Change in true anomaly (Eq 5.23) 
 
-%% Step 2: Calculate the change in true anomaly 
 
-sigma = acos((dot(R1,R2))/(r1*r2));               % Change in true anomaly (Eq 5.23) 
-c12   = cross(R1, R2);                            % Cross product of R1 and R2 (Pg 199)
 
 % Checking whether the orbit is prograde or retrograde to change the TA accordingly (Eq
 % 5.26)
@@ -37,29 +42,19 @@ elseif strcmp(string,'retro')
 end
 
 %% Step 3: Simplification expression  
-
-A = sin(sigma)*sqrt((r1*r2)/(1-cos(sigma)));        % (Eq 5.35)
-
-
-%% Step 4: Determine when F(z) approximately changes sign (Pg 209)
-
-counter = 0;
-while F(z,delta_t) < 0
-    counter = counter + 1
-    z = z + 0.01;
-end
+A = sin(sigma).*sqrt((r1*r2)./(1-cos(sigma)));        % (Eq 5.35)
 
 
-%% Step 5: Calculate what the value of z is for the given values calculated about
+%% Step 4: Calculate what the value of z is using initial guess given in Step 4
 % (Newton's procedure Pg 209)
 
-tol       = 1e-8;          %Tolerance
-nmax      = 5000;          %Limit on iterations
-F_ratio   = 1;
+tol       = 1e-3;          %Tolerance
+nmax      = 100000;        %Limit on iterations
+F_ratio   = 0.001;
 counter_2 = 0;
 
-while (abs(F_ratio) > tol) && (counter_2 <= nmax)
-    counter_2 = counter_2 + 1;
+while abs(F_ratio) > tol && counter_2 <= nmax
+    counter_2 = counter_2 + 1
     F_ratio   = F(z,delta_t)/F_der(z);
     z         = z - F_ratio;
 end
@@ -70,22 +65,21 @@ if counter_2 >= nmax
 end
 
 
-%% Step 6: Calculating Lagrange function
+%% Step 5: Calculating Lagrange function (Expressed in terms of universal anomaly for this analysis)
+f     = 1 - (y(z)./r1);            % Lagrange function (Eq 5.46a)
+g     = A.*sqrt(y(z)./mu);         % Lagrange function (Eq 5.46b)
+g_dot = 1 - (y(z)./r2);            % Lagrange function (Eq 5.46d)
 
-f     = 1 - (y(z)/r1);            % Lagrange function (Eq 5.46a)
-g     = A*sqrt(y(z)/mu);          % Lagrange function (Eq 5.46b)
-g_dot = 1 - (y(z)/r2);            % Lagrange function (Eq 5.46d)
+%% Step 6: Calculating Velocity Vectors (Rearranging the relation between Lagrange coefficients and position&velocity vectors)
 
-%% Step 7: Calculating Velocity Vectors
-
-Velocity_Vector1 = (1/g)*(R2-(f.*R1));              % Velocity Vector 1 (Eq 5.28)
-Velocity_Vector2 = (1/g)*((g_dot.*R2)-R1);          % Velocity Vector 2 (Eq 5.29)
+Velocity_Vector1 = (1./g).*(R2-(f.*R1));              % Velocity Vector 1 (Eq 5.28)
+Velocity_Vector2 = (1./g).*((g_dot.*R2)-R1);          % Velocity Vector 2 (Eq 5.29)
 
 R = [R1 R2];                                        % Position Vector
 V = [Velocity_Vector1 Velocity_Vector2];            % Velocity Vector
 
 
-%% Step 8: Converting Position Vectors into Keplerian Elements
+%% Step 7: Converting Position Vectors into Keplerian Elements
 
 r     = norm(R1);
 v     = norm(Velocity_Vector1);
@@ -113,26 +107,26 @@ Elements = [a e i Omega w nu];
 
 %% FUNCTION 1: Value of y (Equation 5.38)
 function Value_y = y(z)
-Value_y = r1 + r2 + (A*(((z*S(z))-1)/sqrt(C(z))));
+Value_y = r1 + r2 + (A.*(((z.*S(z))-1)./sqrt(C(z))));
 end
 
 %% FUNCTION 2: Value of F(z) function (Equation 5.40)
 function F_function = F(z, delta_t)
-    F_function = (((y(z)/C(z))^1.5)*S(z)) + A*sqrt(y(z)) - (sqrt(mu)*delta_t);
+    F_function = (((y(z)./C(z)).^1.5).*S(z)) + A.*sqrt(y(z)) - (sqrt(mu)*delta_t);
 end
 
 %% FUNCTION 3: Value of derivative of F(z) function (Equation 5.43)
 function Derivative_F = F_der(z)
 if z == 0 
-    Derivative_F = ((sqrt(2)/40)*(y(0)^1.5)) + (A/8)*(sqrt(y(0)) + A*sqrt(1/(2*y(0))));
+    Derivative_F = ((sqrt(2)/40)*(y(0)^1.5)) + (A/8).*(sqrt(y(0)) + A.*sqrt(1/(2.*y(0))));
 else
-    Derivative_F = ((y(z)/C(z))^1.5) * ((1/(2*z))*(C(z) - (3*S(z))/(2*C(z))) ...
-          + (3*(S(z)^2))/(4*C(z))) + A/8*(((3*S(z))/C(z))*sqrt(y(z)) ...
-          + A*sqrt(C(z)/y(z)));
+    Derivative_F = ((y(z)./C(z)).^1.5) * ((1./(2.*z)).*(C(z) - (3.*S(z))/(2.*C(z))) ...
+          + (3.*(S(z).^2))./(4.*C(z))) + A/.8.*(((3.*S(z))./C(z)).*sqrt(y(z)) ...
+          + A.*sqrt(C(z)./y(z)));
 end
 
 end
- 
+
 %% FUNCTION 4a: Stumpff function S(z) (Equation 3.49)
 function StumpffFunction_S = S(z)
 if z>0
@@ -154,4 +148,7 @@ else
     StumpffFunction_C = 1/2;
 end
 end
+
+end
+
 end
