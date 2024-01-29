@@ -7,11 +7,7 @@ function [Velocity_Vector1,Velocity_Vector2, Elements] = Function_Lambert_Solver
 %%input whether you want the orbit to be prograde or retrograde.
 
 %%Note that all the functions used throughout are found at the end of this
-%%document. In such way, the inputs (like z or delta_t) can be inputted
-%%into the function and used in certain areas of the code without having to
-%%include it every time (if that makes sense). The code will refer to the
-%%functions included at the bottom every time it needs to and input the
-%%according value of z or delta_t that you call.
+%%document.
 
     %%%%%%%%%ALL OF THESE EQUATIONS CAN BE FOUND IN "ORBITAL MECHANICS FOR
                         %%%%%%%%%ENGINEERING STUDENTS"            
