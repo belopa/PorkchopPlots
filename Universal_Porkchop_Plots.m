@@ -1,5 +1,7 @@
 clear
 clc
+
+%Function used: Function_Lambert_Solver
                         %%%%%%%%%Inputs%%%%%%%%%
 
 z_input       = -1.6e3;                   %Initial guess for value of z
