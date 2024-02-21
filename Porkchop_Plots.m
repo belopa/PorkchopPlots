@@ -2,99 +2,97 @@ clear
 clc
                         %%%%%%%%%Inputs%%%%%%%%%
 
-z_input       = 2;                        %Initial guess for value of z
-mu_Sun        = 1.32712428e11;            %mu_Sun (km)
-mu_Mercury_km = 2.203e4;                  %Standard gravitational parameter of Mercury
-mu_Venus_km   = 3.249e5;                  %Standard gravitational parameter of Venus
-mu_Earth_km   = 3.986e5;                  %Standard gravitational parameter of Earth
-mu_Mars_km    = 4.283e4;                  %Standard gravitational parameter of Mars
-mu_Jupiter_km = 1.267e8;                  %Standard gravitational parameter of Jupiter
-mu_Saturn_km  = 3.794e7;                  %Standard gravitational parameter of Saturn
-mu_Uranus_km  = 5.795e6;                  %Standard gravitational parameter of Uranus
-mu_Neptune_km = 6.837e6;                  %Standard gravitational parameter of Neptune
+z_input       = -1.6e3;                   %Initial guess for value of z
+
+%Planetary constants
+mu_Sun        = 1.32712428e11;            %mu_Sun [km^3/s^2]
+mu_Mercury_km = 2.203e4;                  %Standard gravitational parameter of Mercury [km^3/s^2]
+mu_Venus_km   = 3.249e5;                  %Standard gravitational parameter of Venus [km^3/s^2]
+mu_Earth_km   = 3.986e5;                  %Standard gravitational parameter of Earth [km^3/s^2]
+mu_Mars_km    = 4.283e4;                  %Standard gravitational parameter of Mars [km^3/s^2]
+mu_Jupiter_km = 1.267e8;                  %Standard gravitational parameter of Jupiter [km^3/s^2]
+mu_Saturn_km  = 3.794e7;                  %Standard gravitational parameter of Saturn [km^3/s^2]
+mu_Uranus_km  = 5.795e6;                  %Standard gravitational parameter of Uranus [km^3/s^2]
+mu_Neptune_km = 6.837e6;                  %Standard gravitational parameter of Neptune [km^3/s^2]
+d_SunEarth    = 150e6;                    %Distance between the Sun and Earth [km]
+d_SunMars     = 228e6;                    %Distance between the Sun and Mars [km]
+r_Earth       = 6378.1;                   %Radius of Earth [km]
+r_Mars        = 3389.5;                   %Radius of Mars [km] 
 
                         %%%%%%%%%Pork chop plot%%%%%%%%%
 
-%% Step 1: Choose departure and arrival planets
+%% Step 1: Choose departure and arrival planets and their properties
+%For convenience, create new variable for the departure and arrival planets
+%(so you don't have to change every variable every time you change the planet of
+%interest)
 depPlanet = 'Earth';
 arrPlanet = 'Mars';
-dep_mu    = mu_Earth_km;
-arr_mu    = mu_Mars_km;
+dep_mu    = mu_Earth_km;                %Standard gravitational parameter of departure planet [km^3/s^2]          
+arr_mu    = mu_Mars_km;                 %Standard gravitational parameter of arrival planet [km^3/s^2]
+d_SunP1   = d_SunEarth;                 %Distance of departure planet to Sun [km]
+d_SunP2   = d_SunMars;                  %Distance of arrival planet to Sun [km]
+r_P1      = r_Earth;                    %Radius of departure planet [km]
+r_P2      = r_Mars;                     %Radius of arrival planet [km]
+alt_P1    = 300;                        %Altitude of initial orbit around departure planet [km]
+alt_P2    = 200;                        %Altitude of final orbit around departure planet [km]
+
+
 
 %% Step 2: Choose an optimal departure and arrival day
-day_dep = datetime('01-05-2020','InputFormat','dd-MM-yyyy');
-day_arr = datetime('01-12-2020','InputFormat','dd-MM-yyyy');
-
+day_dep = datetime('04-08-2026','InputFormat','dd-MM-yyyy');
+day_arr = datetime('20-03-2027','InputFormat','dd-MM-yyyy');
 %Convert to Julian Days
 JD_dep  = juliandate(day_dep);                                  
 JD_arr  = juliandate(day_arr);
-
-
-%% Step 3: Define the desired time window for arrival and departure (to be added to date above)
-tWindowDep = 200; % days added to nominal departure date
-tWindowArr = 200; % days added to nominal arrival date
-
-
-%% Step 4: Define the time steps to build array (defines grid resolution)
-tStepDep   = 1;  % departure resolution
-tStepArr   = 1;  % arrival resolution
-
-
-%% Step 5: Print what the arrival and departure days are in Command Window
-% (user interface friendly, not essential)
-fprintf('\nGenerating the porkchop plot for trajectories \n')
-fprintf('departing %s and arriving at %s.\n',depPlanet,arrPlanet)
+%Define the desired time window for arrival and departure
+tWindowDep = 180;                                      
+tWindowArr = 360;                                     
+%Define the time steps to build array (defines grid resolution)
+tStepDep   = 1;                                         
+tStepArr   = 2;                                        
+%Print what the arrival and departure days are (useful when plotting later)
 depDate=datetime(JD_dep,'convertfrom','juliandate','Format','dd-MMM-yyy');
 depStr=cellstr(depDate);
 arrDate=datetime(JD_arr,'convertfrom','juliandate','Format','dd-MMM-yyy');
 arrStr=cellstr(arrDate);
-fprintf('Nominal departure date: %s \n',depStr{1})
-fprintf('Nominal arrival date: %s \n \n', arrStr{1})
-
-
-%% Step 6: Create an array of departure and arrival windows in Julian Days
+%Create an array of departure and arrival windows in Julian Days
 JDArrayDep = JD_dep : tStepDep : JD_dep+tWindowDep;
 JDArrayArr = JD_arr : tStepArr : JD_arr+tWindowArr;
-
-
-%% Step 7: Test to make sure all arrival times are after departure times
+%Make sure departure and arrival windows dont overlap
 if JDArrayDep(end) >= JDArrayArr(1)
-    fprintf('\n*********************************************** \n');
     fprintf(' Error: Some arrival times before departure times! \n');
     fprintf('        Try adjusting arrival date and tWindow \n');
-    fprintf('*********************************************** \n');
     return
 end
 
-
-%% Step 8: Generate array of planetary ephemerides at each departure/arrival time
+%% Step 3: Generate array of planetary ephemerides at each departure/arrival time
 % (The function used (GenerateEphemerides) can be found at the bottom of
 % the doc)
 [rArray_dep_km, vArray_dep_km]=GenerateEphemerides(JDArrayDep, depPlanet);
 [rArray_arr_km, vArray_arr_km]=GenerateEphemerides(JDArrayArr, arrPlanet);
 
-%used later
-rArray_arr_km_inv = rArray_arr_km';
 
-%% Create cells to have all three velocity components in the same cell for correct indexing below
+%% Step 4: Create cells to have all three velocity components in the same cell for correct indexing below
 %Empty cells
 cell_arr_planet = cell(length(JDArrayDep),length(JDArrayDep));
 cell_dep_planet = cell(length(JDArrayDep),length(JDArrayDep));
 
-%Input velocities into empty cells
+%Input velocities into empty cells:
+%Want to create a departure array with the same velocity in each COLUMN for
+%the correct indexing in loop below (Step 5)
 for i = 1:length(JDArrayDep)
     for j = 1:length(JDArrayDep)
         cell_dep_planet{j,i} = vArray_dep_km(i,:);
-
     end
 end
 
 clear i j
 
+%Want to create an arrival array with the same velocity in each ROW for
+%the correct indexing in loop below (Step 5)
 for j = 1:length(JDArrayArr)
     for i = 1:length(JDArrayArr)
         cell_arr_planet{j,i} = vArray_arr_km(j,:);
-
     end
 end
 
@@ -104,36 +102,29 @@ clear i j
 Velocity_Planet1 = cell_dep_planet;
 Velocity_Planet2 = cell_arr_planet;
 
-
-
-%% Step 9: Go through all departure/arrival times, and use Lamberts algorithm
+%% Step 5: Go through all departure/arrival times, and use Lamberts algorithm
 % to find needed delta-v's at departure and arrival
 fprintf('\n Now building the porkchop plot... ')
 counter_3 = 0;
 
 for i = 1:length(JDArrayDep)
 
-    JDi = JDArrayDep(i);
-
     for j = 1:length(JDArrayArr)
-
-        JDf = JDArrayArr(j);
-        
-        % Build meshes for contour plot axis
-        deltDepMesh(i,:) = JDArrayDep(:,i)-JD_dep;
-        deltArrMesh(j,:) = JDArrayArr(:,j)-JD_arr;
-        
-        
+          
         % Compute heliocentric orbital velocity at departure and arrival using Lambert's method
-        TOF(i,j)                = 86400.0*(JDArrayArr(:,j) - JDArrayDep(:,i));         % time of flight, in seconds (conversion from days to s)
-        [v1Vec{i,j},v2Vec{i,j}, Elements] = Function_Lambert_Solver(z_input, mu_Sun, rArray_dep_km(i,:), rArray_arr_km(j,:), rArray_arr_km_inv(:,j), TOF(i,j), 'pro');       
+        TOF(i,j)                = 86400.0*(JDArrayArr(:,j) - JDArrayDep(:,i));         % time of flight, in seconds 
+        [v1Vec{i,j},v2Vec{i,j}, Elements] = Function_Lambert_Solver(z_input, mu_Sun, rArray_dep_km(i,:), rArray_arr_km(j,:), TOF(i,j), 'pro');       
         counter_3               = counter_3 + 1
 
-      
     end
 end
 
 clear i j
+
+% Intent to get rid of imaginary values:
+% M0 = Elements(6);
+% mask = imag(M0) ~= 0;
+% v1Vec_real = v1Vec(~mask, :);
 
 %% Calculate excess velocity & specific energy & time of flight
 %Create cells for correct indexing
@@ -162,20 +153,29 @@ C3            = vInf_dep_array.^2;            %Specific energy
 vInf          = vInf_arr_array;               %Excess velocity
 
 
-Array_Dep = datetime(JDArrayDep, 'ConvertFrom', 'juliandate');
-Array_Arr = datetime(JDArrayArr, 'ConvertFrom', 'juliandate');
+%Calculating total delta V assuming Hohmann transfer 
+v_apoapsis_hyperbola     = sqrt(vInf_dep_array.^2+((2*dep_mu)/alt_P1));        %Velocity of hyperbolic orbit closest to Planet 1
+v_circ_wrtP1             = sqrt(dep_mu/alt_P1);                                %Velocity of circular orbit around P1
+DELTAV_1                 = v_apoapsis_hyperbola-v_circ_wrtP1;                  %Delta V required for transfer
 
+a_transfer               = -arr_mu./(vInf.^2);                                 %Semi-major axis of hyperbolic transfer orbit
+v_periapsis_hyperbola    = sqrt(((2*arr_mu)/alt_P2)-(arr_mu./a_transfer));      %Velocity of hyperbolic orbit closest to Planet 2
+v_circ_wrtP2             = sqrt(arr_mu/alt_P2);                                %Velocity of circular orbit around P2
+DELTAV_2                 = v_periapsis_hyperbola-v_circ_wrtP2;                 %Delta V required for transfer
+
+TOTALDELTAV              = abs(DELTAV_1)+abs(DELTAV_2);                        %Total delta V
 
 
 %% PLOTTING POSITION OF PLANETS
 
 figure(1)
+grid on
 plot3(rArray_arr_km(:,1),rArray_arr_km(:,2),rArray_arr_km(:,3),'o')
 title(['Orbit of ' depPlanet ' and ' arrPlanet ' around Sun'])
-grid on
 hold on
 plot3(rArray_dep_km(:,1),rArray_dep_km(:,2),rArray_dep_km(:,3),'o')
 legend([arrPlanet ' orbit'],[depPlanet ' orbit'])
+grid off
 hold off
 
 fprintf('Position plot: DONE!\n')
@@ -183,24 +183,35 @@ fprintf('Position plot: DONE!\n')
 %% PLOT THE PORKCHOP
 
 figure(2)
-hold on
-grid on
-contour(JDArrayDep,JDArrayArr, vInf, 20,'ShowText','on','color','r');
-contour(JDArrayDep, JDArrayArr, C3, 10, 'color','b','LineWidth',1.5,'ShowText','on');
-contour(JDArrayDep, JDArrayArr, TOF_Array, 10, 'color', 'g','ShowText','on', 'LineStyle','--', 'LineWidth',1.5);
+%hold on
+contour(JDArrayDep,JDArrayArr, vInf, 20,'ShowText','on','color','b');
+%contour(JDArrayDep, JDArrayArr, C3, 20, 'color','r','ShowText','on');
+%contour(JDArrayDep, JDArrayArr, TOF_Array, 10, 'color', 'g','ShowText','on', 'LineStyle','--', 'LineWidth',1.5);
 box on
-hold off
+%hold off
 xlabel(['Departure (Days past ', depStr{1},')'],'FontSize',18)
 ylabel(['Arrival (Days past ', arrStr{1},')'],'FontSize',18)
 title([depPlanet, '-to-', arrPlanet, ' Trajectories'],'FontSize',18)
-legend({'v_{\infty}','C3','TOF'},'Location','northeastoutside','fontsize',16)
+%legend({'v_{\infty}','C3','TOF'},'Location','northeastoutside','fontsize',16)
 
 fprintf('Porkchop plot: DONE!\n')
 
 
-%% SURFACE PLOT
+% Plotting total delta V 
+
 figure(3)
-surf(JDArrayDep,JDArrayArr,vInf)
+grid on
+contourf(JDArrayDep,JDArrayArr, vInf, 40,'ShowText','on');
+box on
+xlabel(['Departure (Days past ', depStr{1},')'],'FontSize',18)
+ylabel(['Arrival (Days past ', arrStr{1},')'],'FontSize',18)
+title(['vInf: depPlanet:', depPlanet, '-to-', arrPlanet, ' Trajectories'],'FontSize',18)
+
+fprintf('Porkchop plot of delta V: DONE!\n')
+
+%% SURFACE PLOT
+figure(4)
+surf(JDArrayDep,JDArrayArr,C3)
 xlabel(['Departure (Days past ', depStr{1},')'],'FontSize',18)
 ylabel(['Arrival (Days past ', arrStr{1},')'],'FontSize',18)
 zlabel('v_{\infty}','FontSize',18)
